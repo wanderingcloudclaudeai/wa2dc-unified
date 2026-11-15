@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import * as baileys from "@whiskeysockets/baileys";
 import discordJs from "discord.js";
+import { createChannelReorderer } from "./channelReorder.js";
 import {
 	getChatHostChannelId,
 	getChatTargetChannelId,
@@ -12,11 +13,13 @@ import {
 } from "./clientFactories.js";
 import {
 	DISCORD_BOT_PERMISSIONS,
+	MAX_HISTORY_SYNC_DAYS,
 	NEWSLETTER_ACK_WAIT_WITH_SERVER_ID_MS,
 	NEWSLETTER_ACK_WAIT_WITHOUT_SERVER_ID_MS,
 	NEWSLETTER_SERVER_ID_WAIT_POLL_MS,
 	NEWSLETTER_SERVER_ID_WAIT_TIMEOUT_MS,
 	normalizeContactAvatarUrl,
+	normalizeHistorySyncDays,
 	ONE_WAY_MODES,
 	oneWayAllowsDiscordToWhatsApp,
 	oneWayAllowsWhatsAppToDiscord,
@@ -1413,6 +1416,15 @@ client.on("typingStart", async (typing) => {
 	noteDiscordTypingInChannel(channelId, jid);
 });
 
+// Move active chats to the top of their category (opt-in, throttled).
+// Ported from sabaris-sps/wa2dc; see src/channelReorder.js.
+const { moveChannelToTop } = createChannelReorderer({
+	fetchChannel: (channelId) =>
+		client.channels.fetch(channelId).catch(() => null),
+	isEnabled: () => Boolean(state.settings.ReorderChannels),
+	logger: () => state.logger,
+});
+
 client.on("whatsappMessage", async (message) => {
 	if (!allowsWhatsAppToDiscord()) {
 		return;
@@ -1442,6 +1454,10 @@ client.on("whatsappMessage", async (message) => {
 		}
 
 		await sendWhatsappMessage(message, message.file ? [message.file] : []);
+		// Bump the chat's channel after a WhatsApp message (never blocks delivery).
+		void moveChannelToTop(
+			getChatHostChannelId(state.chats[message.channelJid]),
+		);
 	} catch (err) {
 		state.logger?.error({ err }, "Failed to process incoming WhatsApp message");
 	}
@@ -5040,6 +5056,54 @@ const commandHandlers = {
 			);
 		},
 	},
+	historysyncdays: {
+		description:
+			"Set how many days of WhatsApp history to sync when linking (0 disables).",
+		options: [
+			{
+				name: "days",
+				description: "Number of days (0-365, 0 disables history sync).",
+				type: ApplicationCommandOptionType.Integer,
+				required: true,
+			},
+		],
+		async execute(ctx) {
+			const days = normalizeHistorySyncDays(ctx.getIntegerOption("days"), null);
+			if (days == null) {
+				await ctx.reply(
+					`Please provide a whole number of days between 0 and ${MAX_HISTORY_SYNC_DAYS}.`,
+				);
+				return;
+			}
+			state.settings.HistorySyncDays = days;
+			await storage.saveSettings().catch(() => {});
+			await ctx.reply(
+				days === 0
+					? "WhatsApp history sync is disabled."
+					: `WhatsApp history sync is limited to the last **${days} day(s)**. This applies the next time WhatsApp sends history (after re-linking or reconnecting).`,
+			);
+		},
+	},
+	reorderchannels: {
+		description: "Toggle moving active channels to the top of their category.",
+		options: [
+			{
+				name: "enabled",
+				description:
+					"Whether active chats should be moved to the top automatically.",
+				type: ApplicationCommandOptionType.Boolean,
+				required: true,
+			},
+		],
+		async execute(ctx) {
+			const enabled = Boolean(ctx.getBooleanOption("enabled"));
+			state.settings.ReorderChannels = enabled;
+			await storage.saveSettings().catch(() => {});
+			await ctx.reply(
+				`Active channel reordering is set to ${state.settings.ReorderChannels}.`,
+			);
+		},
+	},
 	readreceipts: {
 		description: "Toggle read receipts.",
 		options: [
@@ -5998,6 +6062,10 @@ client.on("messageCreate", async (message) => {
 		message.wa2dcForwardSnapshot = snapshot;
 	}
 	state.waClient.ev.emit("discordMessage", { jid, message, forwardContext });
+	// Bump the chat's channel after a Discord reply (never blocks delivery).
+	void moveChannelToTop(
+		message.channel?.isThread?.() ? null : message.channel?.id,
+	);
 });
 
 client.on("messageUpdate", async (oldMessage, message) => {

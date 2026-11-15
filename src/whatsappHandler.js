@@ -24,6 +24,7 @@ import {
 	NEWSLETTER_SERVER_ID_WAIT_TIMEOUT_MS,
 	oneWayAllowsDiscordToWhatsApp,
 	oneWayAllowsWhatsAppToDiscord,
+	shouldSyncHistoryChunk,
 	WHATSAPP_BROWSER_PROFILE_ENV,
 	WHATSAPP_BROWSER_PROFILES,
 } from "./contracts.js";
@@ -230,8 +231,21 @@ const createStartupProbeBaileysLogger = (baseLogger) => {
 	}
 	return logger;
 };
-const shouldSyncWhatsAppHistoryMessage = ({ syncType } = {}) =>
-	!HISTORY_SYNC_TYPES_TO_SKIP.has(syncType);
+// HistorySyncDays = 0 (default) keeps the maintained behaviour of skipping
+// every history chunk. With N > 0 only RECENT chunks whose oldest message is
+// within the last N days are downloaded, which seeds contacts and chats
+// without pulling the full archive into memory.
+const HISTORY_SYNC_TYPES_ALLOWED_WITH_LIMIT = [
+	proto.HistorySync.HistorySyncType.RECENT,
+];
+const shouldSyncWhatsAppHistoryMessage = (notification = {}) => {
+	const days = state.settings?.HistorySyncDays || 0;
+	if (days === 0) return !HISTORY_SYNC_TYPES_TO_SKIP.has(notification.syncType);
+	return shouldSyncHistoryChunk(notification, {
+		days,
+		allowedSyncTypes: HISTORY_SYNC_TYPES_ALLOWED_WITH_LIMIT,
+	});
+};
 const summarizeBaileysErrorStack = (stack) => {
 	if (typeof stack !== "string") return undefined;
 	if (
@@ -3416,215 +3430,223 @@ const connectToWhatsApp = async (retry = 1) => {
 	client.ev.on("messages.upsert", async (update) => {
 		if (["notify", "append"].includes(update.type)) {
 			for await (const rawMessage of update.messages) {
-				const messageId = normalizeBridgeMessageId(
-					utils.whatsapp.getId(rawMessage),
-				);
-				const outboundId = normalizeBridgeMessageId(rawMessage?.key?.id);
-				const serverId = normalizeBridgeMessageId(
-					getNewsletterServerIdFromMessage(rawMessage),
-				);
-				const remoteJid = normalizeSendJid(
-					rawMessage?.key?.remoteJid ||
-						rawMessage?.chatId ||
-						rawMessage?.attrs?.from,
-				);
-				const newsletterChat = isNewsletterJid(remoteJid);
-				if (newsletterChat) {
-					const resolvedServerId = normalizeBridgeMessageId(
-						serverId || messageId || outboundId,
+				try {
+					const messageId = normalizeBridgeMessageId(
+						utils.whatsapp.getId(rawMessage),
 					);
-					if (resolvedServerId) {
-						const pending = resolvePendingNewsletterSend({
-							jid: remoteJid,
-							serverId: resolvedServerId,
-							message: rawMessage,
-						});
-						mapPendingNewsletterServerId({
-							jid: remoteJid,
-							serverId: resolvedServerId,
-							pending,
-							source: "messages.upsert",
-						});
-					}
-				}
-				const sentCandidates = [
-					...new Set([messageId, outboundId, serverId].filter(Boolean)),
-				];
-				if (sentCandidates.some((id) => state.sentMessages.has(id))) {
+					const outboundId = normalizeBridgeMessageId(rawMessage?.key?.id);
+					const serverId = normalizeBridgeMessageId(
+						getNewsletterServerIdFromMessage(rawMessage),
+					);
+					const remoteJid = normalizeSendJid(
+						rawMessage?.key?.remoteJid ||
+							rawMessage?.chatId ||
+							rawMessage?.attrs?.from,
+					);
+					const newsletterChat = isNewsletterJid(remoteJid);
 					if (newsletterChat) {
-						mapNewsletterServerIdFromOutbound({ outboundId, serverId });
-					}
-					sentCandidates.forEach((id) => {
-						state.sentMessages.delete(id);
-					});
-					continue;
-				}
-				if (newsletterChat && rawMessage?.key?.fromMe) {
-					const rejectedId = sentCandidates.find((id) =>
-						getNewsletterAckError(id),
-					);
-					if (rejectedId) {
-						const ackError = getNewsletterAckError(rejectedId);
-						state.logger?.debug?.(
-							{
-								jid: remoteJid,
-								outboundId,
-								messageId,
-								serverId,
-								rejectedId,
-								error: ackError,
-							},
-							"Skipping newsletter fromMe upsert for ack-rejected send",
+						const resolvedServerId = normalizeBridgeMessageId(
+							serverId || messageId || outboundId,
 						);
+						if (resolvedServerId) {
+							const pending = resolvePendingNewsletterSend({
+								jid: remoteJid,
+								serverId: resolvedServerId,
+								message: rawMessage,
+							});
+							mapPendingNewsletterServerId({
+								jid: remoteJid,
+								serverId: resolvedServerId,
+								pending,
+								source: "messages.upsert",
+							});
+						}
+					}
+					const sentCandidates = [
+						...new Set([messageId, outboundId, serverId].filter(Boolean)),
+					];
+					if (sentCandidates.some((id) => state.sentMessages.has(id))) {
+						if (newsletterChat) {
+							mapNewsletterServerIdFromOutbound({ outboundId, serverId });
+						}
+						sentCandidates.forEach((id) => {
+							state.sentMessages.delete(id);
+						});
 						continue;
 					}
-				}
-				if (
-					newsletterChat &&
-					rawMessage?.key?.fromMe &&
-					outboundId &&
-					state.lastMessages[outboundId]
-				) {
-					mapNewsletterServerIdFromOutbound({ outboundId, serverId });
-					continue;
-				}
-				const messageType = utils.whatsapp.getMessageType(rawMessage);
-				if (
-					!utils.whatsapp.inWhitelist(rawMessage) ||
-					!utils.whatsapp.sentAfterStart(rawMessage) ||
-					!messageType
-				)
-					continue;
-
-				storeMessage(rawMessage);
-
-				if (
-					utils.whatsapp.isStatusBroadcast(rawMessage) &&
-					!state.settings.MirrorWAStatuses
-				) {
-					continue;
-				}
-
-				if (messageType === "pollUpdateMessage") {
-					const handled = await handlePollUpdateMessage(client, rawMessage);
-					if (handled) continue;
-				}
-
-				const channelJid = await utils.whatsapp.getChannelJid(rawMessage);
-				if (!channelJid) {
-					continue;
-				}
-
-				if (isPinInChatMessage(rawMessage.message)) {
-					const { pinInChatMessage } = rawMessage.message;
-					const targetKey = {
-						...pinInChatMessage.key,
-						remoteJid: utils.whatsapp.formatJid(
-							pinInChatMessage.key?.remoteJid || channelJid,
-						),
-					};
-					const isPin =
-						pinInChatMessage.type ===
-							proto.Message.PinInChatMessage.Type.PIN_FOR_ALL ||
-						pinInChatMessage.type === 1;
-					const pinNoticeKey = rawMessage?.key?.id
-						? {
-								...rawMessage.key,
-								remoteJid: utils.whatsapp.formatJid(
-									rawMessage.key.remoteJid || channelJid,
-								),
-								participant: utils.whatsapp.formatJid(
-									rawMessage.key.participant || rawMessage.key.participantAlt,
-								),
-							}
-						: null;
-					const isSelfPin =
-						state.sentPins.has(targetKey.id) ||
-						(pinNoticeKey?.id && state.sentPins.has(pinNoticeKey.id));
-					if (isSelfPin) {
-						state.sentPins.delete(targetKey.id);
-						if (pinNoticeKey?.id) state.sentPins.delete(pinNoticeKey.id);
-						if (pinNoticeKey?.id) {
-							try {
-								await client.sendMessage(pinNoticeKey.remoteJid, {
-									delete: pinNoticeKey,
-								});
-							} catch (err) {
-								state.logger?.debug?.(
-									{ err },
-									"Failed to delete local pin notice",
-								);
-							}
+					if (newsletterChat && rawMessage?.key?.fromMe) {
+						const rejectedId = sentCandidates.find((id) =>
+							getNewsletterAckError(id),
+						);
+						if (rejectedId) {
+							const ackError = getNewsletterAckError(rejectedId);
+							state.logger?.debug?.(
+								{
+									jid: remoteJid,
+									outboundId,
+									messageId,
+									serverId,
+									rejectedId,
+									error: ackError,
+								},
+								"Skipping newsletter fromMe upsert for ack-rejected send",
+							);
+							continue;
 						}
-					} else {
-						state.dcClient.emit("whatsappPin", {
-							jid: channelJid,
-							key: targetKey,
-							pinned: isPin,
-							actor: await utils.whatsapp.getSenderName(rawMessage),
-						});
 					}
-					continue;
-				}
+					if (
+						newsletterChat &&
+						rawMessage?.key?.fromMe &&
+						outboundId &&
+						state.lastMessages[outboundId]
+					) {
+						mapNewsletterServerIdFromOutbound({ outboundId, serverId });
+						continue;
+					}
+					const messageType = utils.whatsapp.getMessageType(rawMessage);
+					if (
+						!utils.whatsapp.inWhitelist(rawMessage) ||
+						!utils.whatsapp.sentAfterStart(rawMessage) ||
+						!messageType
+					)
+						continue;
 
-				const pollCreation = getPollCreation(rawMessage.message);
-				if (pollCreation) {
-					const pollText = formatPollForDiscord(rawMessage);
-					const name = await utils.whatsapp.getSenderName(rawMessage);
-					const pollOptions = getPollOptions(pollCreation);
+					storeMessage(rawMessage);
+
+					if (
+						utils.whatsapp.isStatusBroadcast(rawMessage) &&
+						!state.settings.MirrorWAStatuses
+					) {
+						continue;
+					}
+
+					if (messageType === "pollUpdateMessage") {
+						const handled = await handlePollUpdateMessage(client, rawMessage);
+						if (handled) continue;
+					}
+
+					const channelJid = await utils.whatsapp.getChannelJid(rawMessage);
+					if (!channelJid) {
+						continue;
+					}
+
+					if (isPinInChatMessage(rawMessage.message)) {
+						const { pinInChatMessage } = rawMessage.message;
+						const targetKey = {
+							...pinInChatMessage.key,
+							remoteJid: utils.whatsapp.formatJid(
+								pinInChatMessage.key?.remoteJid || channelJid,
+							),
+						};
+						const isPin =
+							pinInChatMessage.type ===
+								proto.Message.PinInChatMessage.Type.PIN_FOR_ALL ||
+							pinInChatMessage.type === 1;
+						const pinNoticeKey = rawMessage?.key?.id
+							? {
+									...rawMessage.key,
+									remoteJid: utils.whatsapp.formatJid(
+										rawMessage.key.remoteJid || channelJid,
+									),
+									participant: utils.whatsapp.formatJid(
+										rawMessage.key.participant || rawMessage.key.participantAlt,
+									),
+								}
+							: null;
+						const isSelfPin =
+							state.sentPins.has(targetKey.id) ||
+							(pinNoticeKey?.id && state.sentPins.has(pinNoticeKey.id));
+						if (isSelfPin) {
+							state.sentPins.delete(targetKey.id);
+							if (pinNoticeKey?.id) state.sentPins.delete(pinNoticeKey.id);
+							if (pinNoticeKey?.id) {
+								try {
+									await client.sendMessage(pinNoticeKey.remoteJid, {
+										delete: pinNoticeKey,
+									});
+								} catch (err) {
+									state.logger?.debug?.(
+										{ err },
+										"Failed to delete local pin notice",
+									);
+								}
+							}
+						} else {
+							state.dcClient.emit("whatsappPin", {
+								jid: channelJid,
+								key: targetKey,
+								pinned: isPin,
+								actor: await utils.whatsapp.getSenderName(rawMessage),
+							});
+						}
+						continue;
+					}
+
+					const pollCreation = getPollCreation(rawMessage.message);
+					if (pollCreation) {
+						const pollText = formatPollForDiscord(rawMessage);
+						const name = await utils.whatsapp.getSenderName(rawMessage);
+						const pollOptions = getPollOptions(pollCreation);
+						state.dcClient.emit("whatsappMessage", {
+							id: utils.whatsapp.getId(rawMessage),
+							name,
+							content: pollText || pollCreation.name || "Poll",
+							quote: await utils.whatsapp.getQuote(rawMessage),
+							file: null,
+							profilePic: await utils.whatsapp.getProfilePic(rawMessage),
+							channelJid,
+							isGroup: utils.whatsapp.isGroup(rawMessage),
+							isForwarded: utils.whatsapp.isForwarded(
+								rawMessage.message,
+								rawMessage?.message?.messageContextInfo,
+							),
+							isEdit: false,
+							isPoll: true,
+							pollOptions,
+							pollSelectableCount:
+								pollCreation.selectableOptionsCount ||
+								pollCreation.selectableCount ||
+								1,
+						});
+						const ts = utils.whatsapp.getTimestamp(rawMessage);
+						if (ts > state.startTime) state.startTime = ts;
+						continue;
+					}
+
+					const [nMsgType, message] = utils.whatsapp.getMessage(
+						rawMessage,
+						messageType,
+					);
+					const { content, discordMentions, discordMentionEveryone } =
+						await utils.whatsapp.getContent(message, nMsgType, messageType, {
+							mentionTarget: "discord",
+						});
 					state.dcClient.emit("whatsappMessage", {
 						id: utils.whatsapp.getId(rawMessage),
-						name,
-						content: pollText || pollCreation.name || "Poll",
+						name: await utils.whatsapp.getSenderName(rawMessage),
+						content,
 						quote: await utils.whatsapp.getQuote(rawMessage),
-						file: null,
+						file: await utils.whatsapp.getFile(rawMessage, messageType),
 						profilePic: await utils.whatsapp.getProfilePic(rawMessage),
-						channelJid,
+						channelJid: await utils.whatsapp.getChannelJid(rawMessage),
 						isGroup: utils.whatsapp.isGroup(rawMessage),
 						isForwarded: utils.whatsapp.isForwarded(
-							rawMessage.message,
+							message,
 							rawMessage?.message?.messageContextInfo,
 						),
-						isEdit: false,
-						isPoll: true,
-						pollOptions,
-						pollSelectableCount:
-							pollCreation.selectableOptionsCount ||
-							pollCreation.selectableCount ||
-							1,
+						isEdit: messageType === "editedMessage",
+						discordMentions,
+						discordMentionEveryone,
 					});
 					const ts = utils.whatsapp.getTimestamp(rawMessage);
 					if (ts > state.startTime) state.startTime = ts;
-					continue;
+				} catch (err) {
+					// One malformed message must not abort the rest of the batch.
+					state.logger?.error?.(
+						{ err, messageId: rawMessage?.key?.id },
+						"Failed to process WhatsApp message from upsert batch",
+					);
 				}
-
-				const [nMsgType, message] = utils.whatsapp.getMessage(
-					rawMessage,
-					messageType,
-				);
-				const { content, discordMentions, discordMentionEveryone } =
-					await utils.whatsapp.getContent(message, nMsgType, messageType, {
-						mentionTarget: "discord",
-					});
-				state.dcClient.emit("whatsappMessage", {
-					id: utils.whatsapp.getId(rawMessage),
-					name: await utils.whatsapp.getSenderName(rawMessage),
-					content,
-					quote: await utils.whatsapp.getQuote(rawMessage),
-					file: await utils.whatsapp.getFile(rawMessage, messageType),
-					profilePic: await utils.whatsapp.getProfilePic(rawMessage),
-					channelJid: await utils.whatsapp.getChannelJid(rawMessage),
-					isGroup: utils.whatsapp.isGroup(rawMessage),
-					isForwarded: utils.whatsapp.isForwarded(
-						message,
-						rawMessage?.message?.messageContextInfo,
-					),
-					isEdit: messageType === "editedMessage",
-					discordMentions,
-					discordMentionEveryone,
-				});
-				const ts = utils.whatsapp.getTimestamp(rawMessage);
-				if (ts > state.startTime) state.startTime = ts;
 			}
 		}
 	});

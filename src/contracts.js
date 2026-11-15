@@ -116,7 +116,36 @@ const createDefaultSettings = () => ({
 	CustomContactAvatars: {},
 	HidePhoneNumbers: false,
 	PrivacySalt: "",
+	// Ported from sabaris-sps/wa2dc. 0 keeps the maintained default (no
+	// history sync); N > 0 accepts history chunks no older than N days.
+	HistorySyncDays: 0,
+	ReorderChannels: false,
 });
+
+const MAX_HISTORY_SYNC_DAYS = 365;
+
+const normalizeHistorySyncDays = (value, fallback = 0) => {
+	const days = typeof value === "number" ? value : Number.NaN;
+	return Number.isInteger(days) && days >= 0 && days <= MAX_HISTORY_SYNC_DAYS
+		? days
+		: fallback;
+};
+
+// Decides whether a WhatsApp history-sync chunk should be downloaded.
+// Baileys hands us the HistorySyncNotification (not individual messages), so
+// the cut-off is applied per chunk using oldestMsgInChunkTimestampSec.
+const shouldSyncHistoryChunk = (
+	{ syncType, oldestMsgInChunkTimestampSec } = {},
+	{ days = 0, allowedSyncTypes = [], nowSeconds = Date.now() / 1000 } = {},
+) => {
+	const limit = normalizeHistorySyncDays(days, 0);
+	if (limit === 0 || !allowedSyncTypes.includes(syncType)) return false;
+	const raw = oldestMsgInChunkTimestampSec;
+	const oldest =
+		typeof raw?.toNumber === "function" ? raw.toNumber() : Number(raw);
+	if (!Number.isFinite(oldest) || oldest <= 0) return true;
+	return oldest >= nowSeconds - limit * 86400;
+};
 
 const SETTINGS_KEYS = new Set(Object.keys(createDefaultSettings()));
 
@@ -151,6 +180,11 @@ const normalizeSettings = (raw = {}, { logger = null } = {}) => {
 	);
 	settings.WhatsAppAudioConversionFormat =
 		settings.WhatsAppAudioConversionFormat === "mp3" ? "mp3" : "original";
+	settings.HistorySyncDays = normalizeHistorySyncDays(
+		settings.HistorySyncDays,
+		defaults.HistorySyncDays,
+	);
+	settings.ReorderChannels = Boolean(settings.ReorderChannels);
 	settings.Categories = uniqueDiscordIds(settings.Categories);
 	settings.Whitelist = normalizeStringArray(settings.Whitelist);
 	settings.oneWay = normalizeOneWayMode(settings.oneWay);
@@ -196,15 +230,18 @@ export {
 	createDefaultSettings,
 	DISCORD_BOT_PERMISSIONS,
 	DISCORD_REST_REQUEST_TIMEOUT_MS,
+	MAX_HISTORY_SYNC_DAYS,
 	NEWSLETTER_ACK_WAIT_WITH_SERVER_ID_MS,
 	NEWSLETTER_ACK_WAIT_WITHOUT_SERVER_ID_MS,
 	NEWSLETTER_SERVER_ID_WAIT_POLL_MS,
 	NEWSLETTER_SERVER_ID_WAIT_TIMEOUT_MS,
 	normalizeContactAvatarUrl,
+	normalizeHistorySyncDays,
 	normalizeSettings,
 	ONE_WAY_MODES,
 	oneWayAllowsDiscordToWhatsApp,
 	oneWayAllowsWhatsAppToDiscord,
+	shouldSyncHistoryChunk,
 	WHATSAPP_BROWSER_PROFILE_ENV,
 	WHATSAPP_BROWSER_PROFILES,
 };

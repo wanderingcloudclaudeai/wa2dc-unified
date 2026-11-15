@@ -510,6 +510,14 @@ Set how often WA2DC persists app state, in seconds. The default is 300 seconds.
 
 Usage: `/autosaveinterval seconds:<positive integer>`
 
+### `/historysyncdays`
+Limit WhatsApp history sync to recent chunks. `0` (default) disables history sync; `1`–`365` accepts "recent" history chunks whose oldest message is at most that many days old. The limit is applied per chunk the next time WhatsApp sends history (after linking or reconnecting).  
+Usage: `/historysyncdays days:<integer>`
+
+### `/reorderchannels`
+Move a chat's Discord channel to the top of its category when it receives or sends a message. Off by default. Moves are throttled to one per channel every 10 minutes to stay inside Discord's channel-update rate limit; threads are never moved.  
+Usage: `/reorderchannels enabled:<true|false>`
+
 ### `/lastmessagestorage`
 
 Set how many recent message mappings remain available for edits, deletions, quotes, pins, and reactions. The default is 500.
