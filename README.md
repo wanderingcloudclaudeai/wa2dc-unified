@@ -1,42 +1,61 @@
-# WhatsApp To Discord
+# wa2dc-unified
 
 <p align="center">
-  <img src="docs/_media/logo.png" alt="WA2DC logo" width="180" />
+  <img src="docs/_media/logo.png" alt="WA2DC logo" width="160" />
 </p>
 
-[![Latest release](https://img.shields.io/github/v/release/arespawn/WhatsAppToDiscord?display_name=tag&sort=semver&logo=github)](https://github.com/arespawn/WhatsAppToDiscord/releases/latest) [![Total downloads](https://img.shields.io/github/downloads/arespawn/WhatsAppToDiscord/total?logo=github)](https://github.com/arespawn/WhatsAppToDiscord/releases) [![License](https://img.shields.io/github/license/arespawn/WhatsAppToDiscord)](LICENSE.txt) [![CI](https://img.shields.io/github/actions/workflow/status/arespawn/WhatsAppToDiscord/ci.yml?label=CI&logo=github)](https://github.com/arespawn/WhatsAppToDiscord/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/actions/workflow/status/arespawn/WhatsAppToDiscord/release.yml?label=release&logo=github)](https://github.com/arespawn/WhatsAppToDiscord/actions/workflows/release.yml) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?logo=github)](https://github.com/arespawn/WhatsAppToDiscord/pulls)
+**One repository for the open-source WhatsApp ⇄ Discord bridges.** wa2dc-unified merges WhatsAppToDiscord (FKLC's original and arespawn's maintained successor), the sabaris-sps `wa2dc` fork, OSdc-wa and Hummus, with their full git histories, under the MIT licence they all share.
 
-WhatsAppToDiscord (WA2DC) is a self-hosted bridge that mirrors WhatsApp chats into Discord through [Baileys](https://github.com/WhiskeySockets/Baileys) and [discord.js](https://github.com/discordjs/discord.js).
+| Bridge | Path | Stack | Direction | Pick it when |
+| --- | --- | --- | --- | --- |
+| **WA2DC** (main) | repository root | Node.js 24, Baileys, discord.js | two-way | You want everything: every chat mirrored to its own channel or thread, slash commands, media, polls, newsletters, encryption at rest. |
+| **OSdc-wa** | `bridges/osdc-wa` | Node.js 22+, Baileys, discord.js | two-way | You want a small bridge that maps a few named groups to channels from a `.env` file. |
+| **Hummus** | `bridges/hummus` | Go, whatsmeow, discordgo | WhatsApp → Discord | You want a single read-only mirror of one chat as one static binary. |
 
-Originally created by [Fatih Kilic](https://github.com/FKLC), the project is now maintained by [arespawn](https://github.com/arespawn) with the blessing of the previous author.
+These bridges use unofficial WhatsApp Web clients. They are not affiliated with WhatsApp or Discord, can break when WhatsApp changes its protocol, and can put the linked account at risk of restriction. Do not use them for spam, bulk messaging or monitoring people without consent.
 
-Start with the documentation at [arespawn.com](https://arespawn.com/):
+## Quick start (main bridge)
 
-- [Setup](https://arespawn.com/#/setup)
-- [Configuration](https://arespawn.com/#/configuration)
-- [Slash commands](https://arespawn.com/#/commands)
-- [Troubleshooting](https://arespawn.com/#/faq)
+Linux (Debian/Ubuntu/RHEL family), from a checkout or an extracted release archive:
 
-## Highlights
+```bash
+sudo bash deploy/linux/install-linux_v1.0.0_2026-11-15T012816Z.sh --bridge main
+```
 
-- Bidirectional message, media, reaction, edit, delete, poll, and pin bridging
-- Whitelist and one-way routing controls
-- Discord channels or forum threads for WhatsApp conversations
-- PN/LID-aware WhatsApp identity handling
-- Newsletter and broadcast support
-- Packaged binaries, Docker images, and Node.js source installs
+Windows 10/11 or Server 2022+, from an elevated PowerShell:
 
-## Installation choices
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass -Force
+.\deploy\windows\install-windows_v1.0.0_2026-11-15T012816Z.ps1 -Bridge main
+```
 
-- **Packaged binary:** download a signed release asset from [GitHub Releases](https://github.com/arespawn/WhatsAppToDiscord/releases/latest).
-- **Docker:** copy `.env.example` to `.env`, set `WA2DC_TOKEN`, then run `docker compose up -d`.
-- **Source:** install Node.js 24.22.1–24.x or 26.12.1 and newer, run `npm ci`, then `npm start`. The [installer scripts](docs/install-scripts.md) can automate this path.
+Docker:
 
-## Data and security
+```bash
+cp .env.example .env   # then set WA2DC_TOKEN
+docker compose up -d --build
+```
 
-WA2DC runs on your host, but bridging necessarily sends messages and media through WhatsApp and Discord. It stores app state and WhatsApp authentication in `storage/wa2dc.sqlite`; optional payload encryption is available through `WA2DC_DB_PASSPHRASE` when the database is first created.
+Then create the Discord bot, invite it and scan the WhatsApp QR code as described in [docs/setup.md](docs/setup.md).
 
-Keep the Discord control channel private, restrict bridged channels with Discord permissions, protect `.env` and `storage/`, and never share tokens, QR codes, session data, logs, or database copies. See [Privacy and Data Handling](docs/privacypolicy.txt) and [Security Policy](SECURITY.md).
+## Documentation
+
+| Topic | Document |
+| --- | --- |
+| Download, compile, run, publish a release | [Releases guide](docs/unified/RELEASES_2026-11-15T012816Z.md) |
+| Create Linux and Windows host VMs | [VM host guide](docs/unified/VM-HOSTS_2026-11-15T012816Z.md) |
+| What was merged, from where, and why | [UPSTREAMS.md](UPSTREAMS.md) |
+| How this repository was built (blog post) | [Blog post](docs/unified/blog/BLOG_merging-the-whatsapp-discord-bridges_2026-11-15T012816Z.md) |
+| The five recommendations and what was done | [Recommendations](docs/unified/RECOMMENDATIONS_2026-11-15T012816Z.md) |
+| Main bridge setup, configuration, commands, FAQ | [docs/](docs/README.md) |
+| OSdc-wa and Hummus configuration | [bridges/osdc-wa/README.md](bridges/osdc-wa/README.md), [bridges/hummus/README.md](bridges/hummus/README.md) |
+
+## What is new compared with the upstreams
+
+- `/reorderchannels` and `/historysyncdays` from the sabaris-sps fork, fixed and covered by tests ([details](UPSTREAMS.md#changes-made-to-merged-code)).
+- Hummus builds against the current whatsmeow again (the 2024 upstream no longer compiles against it).
+- One CI pipeline for all three bridges, one tag-driven release workflow, one installer per operating system.
+- A script that reports and merges new upstream commits: `scripts/sync-upstreams_v1.0.0_2026-11-15T012816Z.sh`.
 
 ## Development
 
@@ -44,12 +63,12 @@ Keep the Discord control channel private, restrict bridged channels with Discord
 npm ci
 npm run check
 npm test
-WA2DC_SMOKE_TEST=1 node src/index.js
+npm --prefix bridges/osdc-wa ci
+npm run test:bridges
 ```
 
-Contributor guidance starts in [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md), and [docs/dev/](docs/dev/README.md).
+The main bridge needs Node.js 24.22.1–24.x or 26.12.1+. `npm run test:bridges` also needs Go (any 1.21+; the toolchain pinned in `bridges/hummus/go.mod` is fetched automatically) and a C compiler.
 
-## Disclaimer
+## Licence and credits
 
-> [!CAUTION]
-> WA2DC is not affiliated with or endorsed by WhatsApp or Discord. WhatsApp and related names, marks, emblems, and images are trademarks of their respective owners. WA2DC uses unofficial WhatsApp Web integration and may be affected by upstream protocol changes or account restrictions. Use it responsibly; do not use it for spam, stalkerware, bulk messaging, or activity that violates platform terms.
+MIT — see [LICENSE.txt](LICENSE.txt). Credit for the code belongs to its authors: Fatih Kilic (FKLC), arespawn and the WhatsAppToDiscord contributors, sabaris-sps, Karvy Singh, and the GoUAE community. See [UPSTREAMS.md](UPSTREAMS.md).

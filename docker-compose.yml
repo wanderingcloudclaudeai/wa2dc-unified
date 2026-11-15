@@ -1,8 +1,10 @@
 name: wa2dc
 services:
   wa2dc:
-    # Use :unstable if you explicitly want prerelease builds (default: :latest)
-    image: ghcr.io/arespawn/whatsapptodiscord:latest
+    # wa2dc-unified builds the image from this checkout so the merged features
+    # are included. (The upstream image is ghcr.io/arespawn/whatsapptodiscord.)
+    build: .
+    image: wa2dc-unified:local
     container_name: wa2dc
     volumes:
       - ./storage:/usr/local/WA2DC/storage

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"mime"
@@ -129,7 +130,7 @@ func ReplaceJIDsWithPushNames(client *whatsmeow.Client, userJIDs []types.JID, me
 	for _, userJID := range userJIDs {
 		// fallback
 		replaceWith := "`@[REDACTED]`"
-		user, err := client.Store.Contacts.GetContact(userJID)
+		user, err := client.Store.Contacts.GetContact(context.Background(), userJID)
 		if err == nil {
 			replaceWith = user.PushName
 		}
@@ -171,7 +172,7 @@ func WhatsappFilesToDiscordFiles(client *whatsmeow.Client, msg *waE2E.Message) (
 			extension = "jpg"
 		}
 
-		data, _ := client.Download(imageMessage)
+		data, _ := client.Download(context.Background(), imageMessage)
 		files = append(files, &discordgo.File{
 			Name:        "image." + extension,
 			ContentType: mimeType,
@@ -195,7 +196,7 @@ func WhatsappFilesToDiscordFiles(client *whatsmeow.Client, msg *waE2E.Message) (
 			extension = extensions[0]
 		}
 
-		data, _ := client.Download(audioMessage)
+		data, _ := client.Download(context.Background(), audioMessage)
 		files = append(files, &discordgo.File{
 			Name:        "audio." + extension,
 			ContentType: mimeType,
@@ -219,7 +220,7 @@ func WhatsappFilesToDiscordFiles(client *whatsmeow.Client, msg *waE2E.Message) (
 			extension = extensions[0]
 		}
 
-		data, _ := client.Download(documentMessage)
+		data, _ := client.Download(context.Background(), documentMessage)
 		files = append(files, &discordgo.File{
 			Name:        "document." + extension,
 			ContentType: mimeType,
@@ -239,7 +240,7 @@ func WhatsappFilesToDiscordFiles(client *whatsmeow.Client, msg *waE2E.Message) (
 
 		extension := "mp4"
 
-		data, _ := client.Download(videoMessage)
+		data, _ := client.Download(context.Background(), videoMessage)
 		files = append(files, &discordgo.File{
 			Name:        "videoMessage." + extension,
 			ContentType: mimeType,
@@ -263,7 +264,7 @@ func WhatsappFilesToDiscordFiles(client *whatsmeow.Client, msg *waE2E.Message) (
 			extension = extensions[0]
 		}
 
-		data, _ := client.Download(stickerMessage)
+		data, _ := client.Download(context.Background(), stickerMessage)
 
 		reader := bytes.NewBuffer(data)
 		var err error

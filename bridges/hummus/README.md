@@ -1,3 +1,5 @@
+> Part of [wa2dc-unified](../../README.md). Imported from [GoUAE/Hummus](https://github.com/GoUAE/Hummus) and ported to the current whatsmeow API; see [UPSTREAMS.md](../../UPSTREAMS.md).
+
 # Hummus
 
 [![Go Report](https://goreportcard.com/badge/github.com/gouae/hummus)](https://goreportcard.com/report/gouae/hummus) [![Coders(HQ) Discord](https://img.shields.io/badge/Discord-%23golang-blue.svg)](https://golang.ae/discord) 
@@ -23,12 +25,14 @@ cp .env.example .env
 
 3. Fill in the necessary environment variables in the .env file. You'll need to provide values for the following variables:
 ```env
-DISCORD_BOT_TOKENDISCORD_CHANNEL_ID=
+DISCORD_BOT_TOKEN=
+DISCORD_CHANNEL_ID=
 DISCORD_WEBHOOK_ID=
 DISCORD_WEBHOOK_TOKEN=
 DISCORD_FALLBACK_AVATAR_URL=
-# We support only 1 WhatsApp chat for now, you'll have to get its ID manually (instructions TBA).
-WA_GOUAE_JID=
+# Only one WhatsApp chat is supported. WA_CHAT_JID is its JID, e.g. 1203630xxxxxxxx@g.us
+# (WA_GOUAE_JID is still accepted for existing installs).
+WA_CHAT_JID=
 ```
 
 4. Install the dependencies
@@ -36,9 +40,9 @@ WA_GOUAE_JID=
 go mod download
 ```
 
-5. Run the project
+5. Run the project (cgo and a C compiler are required for SQLite)
 ```sh
-go run
+CGO_ENABLED=1 go run .
 ```
 
 6. Scan the QR code to log in to the WhatsApp client. 

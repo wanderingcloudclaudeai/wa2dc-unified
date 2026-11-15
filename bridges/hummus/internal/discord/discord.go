@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"context"
 	"log"
 	"regexp"
 	"strings"
@@ -62,6 +63,7 @@ func (bot *Bot) PipeToDiscord(jid types.JID, client *whatsmeow.Client, v *events
 
 	userProfilePicInfo, err := client.
 		GetProfilePictureInfo(
+			context.Background(),
 			v.Info.Sender,
 			&whatsmeow.GetProfilePictureParams{},
 		)

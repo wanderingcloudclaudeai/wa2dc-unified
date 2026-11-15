@@ -1599,6 +1599,16 @@ const movePathWithCrossDeviceFallback = async (from, to) => {
 	await fs.promises.rm(from, { recursive: true, force: true });
 };
 
+// Release feed used for update notices. wa2dc-unified keeps the upstream feed
+// by default (its signed binaries are the only ones the self-updater trusts);
+// forks can point notices at their own releases with WA2DC_UPDATE_REPO.
+const DEFAULT_UPDATE_REPO = "arespawn/WhatsAppToDiscord";
+const UPDATE_REPO = /^[\w.-]+\/[\w.-]+$/u.test(
+	process.env.WA2DC_UPDATE_REPO || "",
+)
+	? process.env.WA2DC_UPDATE_REPO
+	: DEFAULT_UPDATE_REPO;
+
 const updater = {
 	isNode: process.argv0.replace(".exe", "").endsWith("node"),
 
@@ -1807,8 +1817,8 @@ const updater = {
 	async fetchLatestVersion(channel = this.channel) {
 		const endpoint =
 			channel === "unstable"
-				? "https://api.github.com/repos/arespawn/WhatsAppToDiscord/releases?per_page=100"
-				: "https://api.github.com/repos/arespawn/WhatsAppToDiscord/releases/latest";
+				? `https://api.github.com/repos/${UPDATE_REPO}/releases?per_page=100`
+				: `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`;
 		const response = await requests.fetchJson(endpoint);
 		if ("error" in response) {
 			state.logger?.error(response.error);
@@ -1865,9 +1875,9 @@ const updater = {
 
 	buildDownloadUrl(versionTag, name) {
 		if (!versionTag || versionTag === "latest") {
-			return `https://github.com/arespawn/WhatsAppToDiscord/releases/latest/download/${name}`;
+			return `https://github.com/${UPDATE_REPO}/releases/latest/download/${name}`;
 		}
-		return `https://github.com/arespawn/WhatsAppToDiscord/releases/download/${versionTag}/${name}`;
+		return `https://github.com/${UPDATE_REPO}/releases/download/${versionTag}/${name}`;
 	},
 
 	getChannelForVersion(versionTag) {

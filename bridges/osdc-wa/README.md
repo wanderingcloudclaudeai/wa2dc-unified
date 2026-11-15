@@ -1,3 +1,5 @@
+> Part of [wa2dc-unified](../../README.md). Imported from [Karvy-Singh/OSdc-wa](https://github.com/Karvy-Singh/OSdc-wa); see [UPSTREAMS.md](../../UPSTREAMS.md).
+
 # OSdc-wa
 
 A self-hosted, two-way bridge between WhatsApp groups and Discord channels.

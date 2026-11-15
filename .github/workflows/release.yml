@@ -19,7 +19,11 @@ concurrency:
 
 jobs:
   release_please:
-    if: github.event_name == 'push'
+    # wa2dc-unified: the upstream release-please + signing pipeline needs the
+    # upstream GitHub App and signing secrets. It stays here for reference and
+    # only runs when a repository variable explicitly opts in. Unified
+    # releases are produced by unified-release.yml instead.
+    if: github.event_name == 'push' && vars.WA2DC_UPSTREAM_RELEASE_PIPELINE == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read

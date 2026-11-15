@@ -20,3 +20,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+--------------------------------------------------------------------------------
+wa2dc-unified additions
+
+Copyright (c) 2026 wa2dc-unified contributors
+
+The additions made in this repository are released under the same MIT License
+as above. Code imported from other projects keeps its own notice:
+
+  bridges/osdc-wa/LICENSE   MIT License, Copyright (c) 2026 Karvy
+  bridges/hummus/LICENSE    MIT License, Copyright (c) 2024 GoUAE
+
+See UPSTREAMS.md for the full provenance of every merged project.

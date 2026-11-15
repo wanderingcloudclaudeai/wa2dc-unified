@@ -1,7 +1,7 @@
 {
-	"name": "wa2dc",
-	"version": "2.6.0",
-	"description": "WhatsAppToDiscord is a Discord bot that uses WhatsApp Web as a bridge between Discord and WhatsApp",
+	"name": "wa2dc-unified",
+	"version": "2.7.0",
+	"description": "Unified WhatsApp <-> Discord bridge: WhatsAppToDiscord (FKLC, arespawn), wa2dc (sabaris-sps), OSdc-wa and Hummus in one repository",
 	"type": "module",
 	"main": "src/runner.js",
 	"scripts": {
@@ -18,7 +18,8 @@
 		"check": "biome check . --error-on-warnings",
 		"check:write": "biome check --write . --error-on-warnings",
 		"ci:check": "biome ci . --error-on-warnings",
-		"format": "biome format --write ."
+		"format": "biome format --write .",
+		"test:bridges": "npm --prefix bridges/osdc-wa test && (cd bridges/hummus && go vet ./... && go build ./...)"
 	},
 	"knip": {
 		"ignoreBinaries": [
@@ -30,8 +31,7 @@
 			"lottie-web"
 		]
 	},
-	"author": "arespawn (forked from Fatih Kilic)",
-	"repository": "https://github.com/arespawn/WhatsAppToDiscord",
+	"author": "wa2dc-unified contributors (based on work by Fatih Kilic, arespawn, sabaris-sps, Karvy Singh and GoUAE)",
 	"license": "MIT",
 	"engines": {
 		"node": "^24.22.1 || >=26.12.1"

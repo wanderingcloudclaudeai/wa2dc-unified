@@ -11,6 +11,7 @@
   - [Change Playbooks](dev/change-playbooks.md "Change Playbooks | WhatsApp To Discord")
   - [Testing & Release](dev/testing-and-release.md "Testing and Release | WhatsApp To Discord")
   - [Security & Privacy](dev/security-and-privacy.md "Security and Privacy | WhatsApp To Discord")
+- [wa2dc-unified](unified/README.md "wa2dc-unified | Releases, VMs, blog")
 - [Sponsor](sponsor.md "Sponsor | WhatsApp To Discord")
 - [Privacy & Data](privacypolicy.txt "Privacy and Data Handling | WhatsApp To Discord")
 - [Report an Issue](https://github.com/arespawn/WhatsAppToDiscord/issues/new/choose)
