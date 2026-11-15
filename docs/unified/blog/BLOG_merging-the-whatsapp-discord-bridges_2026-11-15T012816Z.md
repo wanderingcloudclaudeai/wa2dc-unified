@@ -66,7 +66,7 @@ Result: more than 960 commits of history from five projects, 393 tests in the ma
 **Create a VM.** On a Linux host with Multipass:
 
 ```bash
-bash deploy/linux/create-linux-vm_v1.0.0_2026-11-15T012816Z.sh --backend multipass --repo-url https://github.com/<owner>/wa2dc-unified.git
+bash deploy/linux/create-linux-vm_v1.0.0_2026-11-15T012816Z.sh --backend multipass --repo-url https://github.com/wanderingcloudclaudeai/wa2dc-unified.git
 ```
 
 On a Windows host with Hyper-V (elevated PowerShell):
