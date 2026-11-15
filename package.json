@@ -1,6 +1,6 @@
 {
 	"name": "wa2dc-unified",
-	"version": "2.7.0",
+	"version": "2.7.1",
 	"description": "Unified WhatsApp <-> Discord bridge: WhatsAppToDiscord (FKLC, arespawn), wa2dc (sabaris-sps), OSdc-wa and Hummus in one repository",
 	"type": "module",
 	"main": "src/runner.js",
